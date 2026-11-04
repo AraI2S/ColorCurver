@@ -1,7 +1,7 @@
 @echo off
 setlocal DisableDelayedExpansion
 pushd "%~dp0" || (
-  echo Cannot open the application folder.
+  echo Cannot open application folder.
   pause
   exit /b 1
 )
