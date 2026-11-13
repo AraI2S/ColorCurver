@@ -1,84 +1,78 @@
-ColorCurver — 3D LUT 图片处理工具
-================================
+﻿ColorCurver - Windows LUT image processor
+v2.0.0
+======================================
 
-一、使用
+1. 直接使用（默认功能）
 
-1. 将整个 ColorCurver 文件夹解压到 Windows 电脑上。
-2. 双击 Main.bat，或把一张/多张图片拖放到 Main.bat 上。
-3. 若 Curves 中有多份滤镜，输入序号选择；直接回车采用默认滤镜。
-4. 没有拖入图片时，使用文件选择窗口选择一张或多张图片。
-5. 程序将直接在原图所在目录生成新 PNG，不会覆盖原图或已有成果。
+解压整个 ColorCurver 文件夹，双击 Main.bat，或者把一张或多张图片拖到 Main.bat 上。
+在「Operation」选择 1，或直接回车，即为普通滤镜处理。
+从列表中选择 Curves 里的 .cube 滤镜；直接回车使用 Default.txt 指定的默认滤镜。
+未拖入图片时，程序会弹出文件选择窗口，可以一次选择多张。
+处理后的 PNG 与输入图片位于同一文件夹；不会覆盖原图或已有输出。
 
-每份 .cube 是固定滤镜，选择后直接应用；无强度、亮度等级等参数输入。
-一次可以处理多张图片，只选择一份滤镜。
+预装的十个独立滤镜：
+  ManuBrightness_450、500、550、600、650、700、750、800
+  PrintShift_Forward     当前印制工序的平均色彩偏移模拟
+  PrintShift_Inverse     根据上述偏移模型预计算的逆向补偿
 
-示例：
-  原图：Movie.png
-  应用目录：ColorCurver
-  选中的滤镜：ManuBrightness600.cube
-  输出：Movie_ColorCurver_ManuBrightness600.png
+默认滤镜是 ManuBrightness_600.cube。也可以在普通模式下直接选择
+PrintShift_Forward.cube 或 PrintShift_Inverse.cube 单独输出处理后的图片。
 
-如果目标文件存在，自动依次使用 _2、_3 等后缀，防止覆盖。
+2. 可选功能：逆向估计与正向回放
 
-二、文件结构
+在「Operation」选择 2，进入逆向估计。
+选择正向 LUT（当前预装 PrintShift_Forward），再选择你希望得到的最终画面。
+程序使用与该正向 LUT 配对的预计算逆向 LUT，输出三份结果：
+  *_VirtualOriginal.png    估计的输入图片（预补偿电子稿候选）
+  *_ForwardReplay.png      将估计输入再次通过正向 LUT 的数字模拟画面
+  *_Comparison.txt         回放画面与目标画面的 RGB 误差报告
 
-ColorCurver/                     顶层文件夹可以随时改名
-  Main.bat                       Windows 启动器
-  Main.ps1                       通用程序、文件选择与管理
-  Library.cs                     .cube 解析、3D 插值和图片处理引擎
-  Curves/
-    ManuBrightness600.cube       默认静态 3D LUT
-    Default.txt                  默认滤镜文件名（可选）
-  README.txt                     使用说明
+例如：为模拟印制工序预补偿一张海报，输入希望印出来的目标图，
+选择 PrintShift_Forward；VirtualOriginal 是可供试印的预补偿电子稿候选。
+ForwardReplay 用于在电脑上与目标图对照。
 
-修改顶层文件夹名后，程序窗口标题、输出图文件名中的程序名会自动跟随。
-内部文件名、内部相对引用及滤镜内容无需修改。
+重要：该模式调用已事先算好的 PrintShift_Inverse.cube，
+不会在处理每张图片时重新数值求解正向 LUT 的反函数。
+逆向结果是近似估计；被裁剪或不可达的颜色无法保证精确恢复。
+报告只检验数字 LUT 闭环，并不代表真实印刷一定达到同等误差。
 
-三、添加、删除、选择滤镜
+3. 增加或替换滤镜
 
-把标准的 3D .cube 文件放进 Curves 文件夹即可。
-程序只读取 .cube；以前的 .json 文件已不支持，可删除。
-每份 .cube 是一个独立的、无需运行时参数的固定效果。
-例如 ManuBrightness500.cube 和 ManuBrightness700.cube 要分别制作。
-添加、删除或替换滤镜无需修改任何程序文件。
+所有滤镜都是单独的静态 3D .cube 文件，存放在 Curves 目录。
+一份文件对应一种确定的色彩映射，不存在运行时调节强度/档位的参数。
+例如要新增 ManuBrightness_650，只需添加独立文件；已预装该档。
 
-Curves/Default.txt 里仅写一个 .cube 文件名，比如：
-  ManuBrightness600.cube
+Curves/Default.txt 只需填写一行希望默认使用的 LUT 文件名。
+修改最外层程序文件夹的名称，无须改 Main.bat、Main.ps1 等内部文件。
 
-默认文件名必须是 Curves 文件夹中的实际文件名。
-若不存在 Default.txt，按文件名排序选第一份作为默认；
-若目录中只有一份 .cube，则直接使用，省略选择界面。
-选择多份滤镜时，回车采用默认滤镜。
+如果需要让某份正向 LUT 在逆向模式下可用，应提供配套的离线逆向 LUT：
+  Example_Forward.cube  <->  Example_Inverse.cube
+也支持正向名为 Example.cube、逆向名为 Example_Inverse.cube。
+逆向 LUT 推荐在文件开头包含用于绑定正向文件的注释：
+  # SOURCE_FORWARD_SHA256 <正向文件的完整 SHA-256>
+程序会检查该指纹是否匹配。没有指纹时可以使用，但会发出警告。
+更换正向 LUT 后，应重新确认配套逆向 LUT 的正确性。
 
-四、接受的 3D .cube 规范
+4. 文件结构
 
-- UTF-8 或普通 ASCII 文本，文件扩展名为 .cube（大小写均可）。
-- 必须包含 LUT_3D_SIZE N，N 从 2 到 256，恰有 N×N×N 行 RGB 数据。
-- 每行依次为输出红、绿、蓝三个有限浮点数；典型值 0–1。
-- 数据顺序：红轴变化最快、绿轴其次、蓝轴最慢。
-- 可包含 TITLE "..."，可包含 # 注释或空行。
-- 可包含 DOMAIN_MIN r g b 与 DOMAIN_MAX r g b；默认各为 0 与 1。
-- 兼容部分软件的 LUT_3D_INPUT_RANGE min max（共用输入范围）。
-- 输入坐标越界时夹到对应边界；输出被裁到 0–1，并转换成 8-bit。
-- 使用四面体插值，对混合 RGB 通道的 3D LUT 同样有效。
-- 为避免歧义，DOMAIN_* 与 LUT_3D_INPUT_RANGE 不应同时定义。
+Main.bat         双击或拖拽入口
+Main.ps1         文件/滤镜选择与运行流程
+Library.cs       通用 .cube 解析、四面体插值、图片处理
+Comparison.cs    仅在逆向回放模式下比较两张图片并生成简短报告
+Curves/          独立 LUT 文件与 Default.txt
 
-当前版本只接受独立 3D LUT：不接受 1D LUT、1D shaper+3D 组合文件、
-Hald PNG、.3dl、旧版 .json 或额外的厂商私有头。
-通常 17、33、65 级 LUT 都可用；较大的 .cube 需要更多内存与加载时间。
+无须安装 Python、FFmpeg、Visual Studio 或第三方图像工具。
+运行环境为 Windows 10/11、Windows PowerShell 5.1 和系统自带 .NET Framework。
+支持 PNG、JPG/JPEG、BMP、TIFF、GIF；GIF 只处理第一帧。
+输出保持输入图片宽高，保存为普通 8-bit PNG，保留透明度；不覆盖原文件。
+当前只支持独立 3D .cube（不支持 1D 或 1D+3D shaper 组合文件）。
+建议输入 SDR、sRGB 图片，并使用匹配输入色彩空间的 LUT。
+不会自动做 Log/HDR/色域转换，也不保证保留原图片的 ICC、EXIF 元数据。
 
-注意：.cube 只定义 RGB 数值映射，本身不会自动转换图像色域、
-传递函数（例如 Log 转 sRGB）或切换 HDR/SDR 工作空间。
-应先确认图片与滤镜的输入色彩空间一致，建议使用普通 SDR sRGB 图片。
+5. PrintShift 研究模型的适用范围
 
-五、图像处理与限制
-
-系统：Windows 10/11，自带 Windows PowerShell 5.1 与 .NET Framework。
-输入：PNG、JPG/JPEG、BMP、TIFF、GIF（GIF 只处理首帧）。
-输出：原分辨率 8-bit PNG。保留图像宽高及透明度，不做 AI 重绘或缩放。
-不保证保留原图的 ICC、EXIF 等元数据，也不保证 16-bit / HDR 精度。
-程序不会改变屏幕 Gamma Ramp 或系统显示亮度。
-工作目录与滤镜目录均通过脚本相对路径定位，不依赖安装目录名称。
-
-第一次安装建议解压到全新目录。升级时可备份所需的 .cube，
-再复制到新版 Curves 文件夹。旧 .json 不会被读取。
+正向 PrintShift LUT 使用六组同一印制工序的海报原版与扫描实样拟合，
+目标是模拟平均色偏。不同纸张、设备、参数和新的画面颜色可能产生不同误差。
+六张样本的整图留一交叉验证，平均 RGB 误差约为 5.74/255。
+该结果用于模型选择，不代表未来所有海报都能达到相同精度。
+预计算逆向 LUT 与正向 LUT 的数字闭环良好，但这不是实际印刷质量验收。

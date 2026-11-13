@@ -30,6 +30,8 @@ public sealed class CubeLut
         stepG = n;
         stepB = n * n;
         data = values;
+        Array.Copy(min, floatMin, 3);
+        Array.Copy(max, floatMax, 3);
         BuildAxis(min[0], max[0], indexR, fractionR);
         BuildAxis(min[1], max[1], indexG, fractionG);
         BuildAxis(min[2], max[2], indexB, fractionB);
@@ -245,6 +247,60 @@ public sealed class CubeLut
         outGreen = ToByte(g0 + (g1 - g0) * w1 + (g2 - g1) * w2 + (g3 - g2) * w3);
         outBlue  = ToByte(b0 + (b1 - b0) * w1 + (b2 - b1) * w2 + (b3 - b2) * w3);
     }
+
+    // Continuous tetrahedral evaluation for high-bit-depth workflows.
+    // Kept separate from the byte lookup used by the established 8-bit engine.
+    private readonly double[] floatMin = new double[3];
+    private readonly double[] floatMax = new double[3];
+
+    private void GetCoordinate(double value, int ch, out int index, out double fract)
+    {
+        double c = ((value - floatMin[ch]) / (floatMax[ch] - floatMin[ch])) * (side - 1);
+        if (c <= 0.0) { index = 0; fract = 0.0; }
+        else if (c >= side - 1) { index = side - 2; fract = 1.0; }
+        else { index = (int)c; fract = c - index; }
+    }
+
+    private static double Clip01(double x)
+    {
+        return x < 0.0 ? 0.0 : x > 1.0 ? 1.0 : x;
+    }
+
+    public void ApplyContinuous(double r, double g, double b,
+                                out double rr, out double gg, out double bb)
+    {
+        int ir, ig, ib;
+        double fr, fg, fb;
+        GetCoordinate(r, 0, out ir, out fr);
+        GetCoordinate(g, 1, out ig, out fg);
+        GetCoordinate(b, 2, out ib, out fb);
+        int offset = ir + ig * stepG + ib * stepB;
+        int s1, s2;
+        double a, c, d;
+        if (fr >= fg)
+        {
+            if (fg >= fb) { s1 = 1; s2 = 1 + stepG; a = fr; c = fg; d = fb; }
+            else if (fr >= fb) { s1 = 1; s2 = 1 + stepB; a = fr; c = fb; d = fg; }
+            else { s1 = stepB; s2 = 1 + stepB; a = fb; c = fr; d = fg; }
+        }
+        else
+        {
+            if (fr >= fb) { s1 = stepG; s2 = 1 + stepG; a = fg; c = fr; d = fb; }
+            else if (fg >= fb) { s1 = stepG; s2 = stepG + stepB; a = fg; c = fb; d = fr; }
+            else { s1 = stepB; s2 = stepG + stepB; a = fb; c = fg; d = fr; }
+        }
+        int p0 = 3 * offset;
+        int p1 = 3 * (offset + s1);
+        int p2 = 3 * (offset + s2);
+        int p3 = 3 * (offset + 1 + stepG + stepB);
+        rr = Clip01(data[p0] + a * (data[p1] - data[p0]) +
+                    c * (data[p2] - data[p1]) + d * (data[p3] - data[p2]));
+        gg = Clip01(data[p0+1] + a * (data[p1+1] - data[p0+1]) +
+                    c * (data[p2+1] - data[p1+1]) + d * (data[p3+1] - data[p2+1]));
+        bb = Clip01(data[p0+2] + a * (data[p1+2] - data[p0+2]) +
+                    c * (data[p2+2] - data[p1+2]) + d * (data[p3+2] - data[p2+2]));
+    }
+
 }
 
 public static class ImageEngine
