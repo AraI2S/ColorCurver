@@ -1,5 +1,5 @@
 #requires -Version 5.1
-# ColorCurver v2.0.1. Standard .cube LUT processing plus lossless floating HDR JXR.
+# ColorCurver v2.0.3. Standard .cube LUT processing plus lossless floating HDR JXR.
 # No application name or specific LUT name is hard-coded.
 param(
     [Parameter(Position=0,ValueFromRemainingArguments=$true)]
@@ -92,7 +92,7 @@ function New-OutputName {
 
 try {
     Write-Host ''
-    Write-Host ('=== ' + $AppName + ' | 2.0.1 ===') -ForegroundColor Cyan
+    Write-Host ('=== ' + $AppName + ' | 2.0.3 ===') -ForegroundColor Cyan
     Write-Host 'Static .cube LUTs | SDR images -> PNG | floating HDR JPEG XR -> lossless JXR'
     Write-Host 'Original images and existing outputs are preserved.'
     Write-Host ''
@@ -166,11 +166,34 @@ try {
     Add-Type -AssemblyName System.Drawing
     if ($hasJxr -and -not $reverseMode) {
         $hdr = Join-Path $PSScriptRoot 'HDR.cs'
-        if (-not (Test-Path -LiteralPath $hdr)) { throw 'Missing HDR.cs.' }
-        Add-Type -AssemblyName PresentationCore
-        Add-Type -AssemblyName WindowsBase
-        Add-Type -LiteralPath @($library,$hdr) -ReferencedAssemblies @(
-            'System.Drawing.dll','PresentationCore.dll','WindowsBase.dll')
+        if (-not (Test-Path -LiteralPath $hdr -PathType Leaf)) { throw 'Missing HDR.cs.' }
+
+        # Windows PowerShell 5.1 compiles C# using the .NET Framework compiler.
+        # A short GAC reference such as 'PresentationCore.dll' is not reliably
+        # resolvable by that compiler even after the assembly has been loaded.
+        # Resolve absolute paths from the actual loaded .NET assemblies.
+        try {
+            Add-Type -AssemblyName PresentationCore -ErrorAction Stop
+            Add-Type -AssemblyName WindowsBase -ErrorAction Stop
+            Add-Type -AssemblyName System.Xaml -ErrorAction Stop
+        }
+        catch {
+            throw ('Windows WPF runtime dependency could not be loaded (PresentationCore / WindowsBase / System.Xaml): ' + $_.Exception.Message)
+        }
+        $drawingReference = [System.Drawing.Bitmap].Assembly.Location
+        $presentationReference = [System.Windows.Media.Imaging.BitmapSource].Assembly.Location
+        $windowsBaseReference = [System.Windows.Int32Rect].Assembly.Location
+        # In .NET Framework 4+, BitmapDecoder/BitmapFrame require IUriContext from System.Xaml.
+        # Compiling with only PresentationCore and WindowsBase produces CS0012 here.
+        $xamlReference = [System.Windows.Markup.IUriContext].Assembly.Location
+        $references = @($drawingReference,$presentationReference,$windowsBaseReference,$xamlReference)
+        foreach ($reference in $references) {
+            if ([string]::IsNullOrWhiteSpace($reference) -or
+                -not [IO.File]::Exists($reference)) {
+                throw ('Missing Windows .NET Framework assembly reference: ' + $reference)
+            }
+        }
+        Add-Type -LiteralPath @($library,$hdr) -ReferencedAssemblies $references -ErrorAction Stop
     }
     else {
         Add-Type -LiteralPath $library -ReferencedAssemblies 'System.Drawing.dll'
